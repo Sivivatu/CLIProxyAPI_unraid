@@ -1,5 +1,11 @@
 # CLIProxyAPI for Unraid
 
+**Sivivatu test fork:** this fork updates the bundled CLIProxyAPI to v8.0.56.
+See [Testing this fork](FORK_TESTING.md) for a local image build, an isolated
+Unraid trial and optional publication to your own registry namespace. The
+original installation guide and template below still reference OzoneH3's public
+image; importing that template alone does not install this fork's backend.
+
 A small Go supervisor and browser dashboard around the upstream CLIProxyAPI
 runtime. It creates configuration and keys automatically, persists your accounts,
 and connects providers through the Management API. No Compose, SSH, YAML editing,

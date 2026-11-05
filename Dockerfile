@@ -14,8 +14,8 @@ FROM ${UPSTREAM_IMAGE}
 COPY --from=build /out/unraid-wrapper /usr/local/bin/unraid-wrapper
 COPY LICENSE /usr/share/licenses/cliproxyapi-unraid/LICENSE
 COPY licenses /usr/share/licenses/cliproxyapi-unraid/dependencies
-LABEL org.opencontainers.image.source="https://github.com/OzoneH3/CLIProxyAPI_unraid" \
-      org.opencontainers.image.title="CLIProxyAPI for Unraid" \
+LABEL org.opencontainers.image.source="https://github.com/Sivivatu/CLIProxyAPI_unraid" \
+      org.opencontainers.image.title="CLIProxyAPI for Unraid (Sivivatu test fork)" \
       org.opencontainers.image.licenses="MIT"
 WORKDIR /data
 EXPOSE 8317 8318
