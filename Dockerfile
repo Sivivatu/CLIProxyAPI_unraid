@@ -1,4 +1,4 @@
-ARG UPSTREAM_IMAGE=eceasy/cli-proxy-api:v8.0.56@sha256:684b7c9314f1198ebcaa6b5bf513d6b90384ea4c9c1704988d905c5567785cc7
+ARG UPSTREAM_IMAGE=eceasy/cli-proxy-api:v8.0.61@sha256:fc714b4339f20b59ee4781eb0f35a9e563aa357daece3081b0e266caeb11187e
 FROM golang:1.26-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./

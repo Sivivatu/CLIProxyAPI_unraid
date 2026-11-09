@@ -1,22 +1,27 @@
 # Verified upstream contracts
 
-## Current image pin — 2026-11-05
+## Current upstream pin — 2026-11-09
 
-The Dockerfile selects CLIProxyAPI v8.0.56, source commit
-`585f97deac9aa57c700301221fb1a7085e1827cc`, using the multi-platform image
-`eceasy/cli-proxy-api:v8.0.56@sha256:684b7c9314f1198ebcaa6b5bf513d6b90384ea4c9c1704988d905c5567785cc7`.
-The registry manifest includes Linux amd64 and arm64.
+The current [upstream release](https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.61)
+is CLIProxyAPI v8.0.61. The Dockerfile pins the
+matching `eceasy/cli-proxy-api` image by release tag and immutable multi-platform
+digest; [`upstream-release.json`](upstream-release.json) records the version,
+digest, and upstream release URL as the machine-readable source of truth. The
+daily release workflow validates the image manifest for Linux amd64 and arm64
+before updating either pin file.
 
-This release includes the [Codex OAuth refresh recovery fix](https://github.com/router-for-me/CLIProxyAPI/issues/6742),
-which refreshes outer credentials earlier and schedules recovery after rejected
-access tokens. An invalidated refresh token still requires a new provider login.
-On 2026-11-05, the wrapper image built successfully on Linux amd64 and passed
-both existing smoke tests: fresh installation and legacy migration. These cover
-bootstrap, API access, dashboard login, management isolation, CSRF, key rotation,
-restart persistence, health and child-process supervision. Live provider OAuth
-and inference were not exercised; native arm64 runtime checks remain in CI.
+The wrapper image is built and smoke-tested on native amd64 and arm64 runners
+before its GHCR tags or GitHub release are published. Tests cover fresh install
+and legacy migration, bootstrap, authenticated API access, dashboard login,
+management isolation, CSRF, key rotation, restart persistence, health, and child
+supervision. They do not exercise live provider OAuth or inference; deployment
+testing is still required for those flows.
 
-## Original compatibility review
+The [Codex OAuth refresh recovery fix](https://github.com/router-for-me/CLIProxyAPI/issues/6742)
+was included by an earlier upstream update. An already-invalidated refresh token
+still requires a new provider login.
+
+## Original compatibility review — 2026-09-27
 
 Reviewed 2026-09-27 against CLIProxyAPI v8.0.2 and source commit
 `4a2c81864f31f39308e946c4c65e72147855da6e` in
@@ -110,5 +115,5 @@ test uses a separate mock server and intercepts external navigation.
 
 These checks do not establish real provider consent/inference, actual Unraid
 Docker UI behavior, arm64 runtime success locally, GHCR publication, or CA
-acceptance. Those release checks remain explicit in README.md. The template stays
-on the local tag until the activation script verifies a public multiarch image.
+acceptance. Those release checks remain explicit in README.md. The fork template
+selects its public GHCR image; production publication is handled by the daily workflow.

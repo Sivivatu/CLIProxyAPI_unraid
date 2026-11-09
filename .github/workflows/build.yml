@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ''
 permissions:
   contents: read
 jobs:
@@ -15,6 +20,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -27,6 +34,7 @@ jobs:
           go build ./...
       - name: Template and frontend syntax
         run: |
+          python3 -m unittest discover -s tests -v
           python3 scripts/validate-template.py
           node --check web/static/app.js
       - uses: docker/setup-buildx-action@v4

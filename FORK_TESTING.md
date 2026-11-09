@@ -1,96 +1,89 @@
-# Testing this fork
+# Fork releases and isolated testing
 
 This is [Sivivatu's fork](https://github.com/Sivivatu/CLIProxyAPI_unraid) of
 [OzoneH3/CLIProxyAPI_unraid](https://github.com/OzoneH3/CLIProxyAPI_unraid).
-GitHub retains the fork relationship. In the working checkout, `origin` points
-to Sivivatu and `upstream` points to OzoneH3, so upstream changes can still be
-fetched and reviewed without sending a pull request.
+The `main` branch publishes the production image
+`ghcr.io/sivivatu/cliproxyapi-unraid`; the source project is
+[router-for-me/CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI).
 
-## What changed
+## Daily upstream release process
 
-The bundled CLIProxyAPI moves from v8.0.2 to v8.0.56, which includes
-[upstream's Codex OAuth refresh recovery fix](https://github.com/router-for-me/CLIProxyAPI/issues/6742).
-The wrapper, account storage and dashboard stay the same.
+The **Sync upstream and publish GHCR** workflow checks the latest stable
+CLIProxyAPI release every day at 05:23 UTC. It can also be started manually from
+GitHub Actions on `main`. It accepts stable `vN.N.N` releases, retrieves the
+matching `eceasy/cli-proxy-api` image, and verifies that its manifest contains
+Linux amd64 and arm64 before changing the pin. The selected version and immutable
+digest are recorded together in `Dockerfile` and `upstream-release.json`.
 
-An image reference containing `latest@sha256:...` selects the exact digest. It
-does not follow subsequent changes to `latest`. This fork uses an explicit
-release tag and its verified multi-platform digest for a reproducible trial.
-Removing the digest would only change which base image a future build selects;
-it would not update the CLIProxyAPI binary inside an already-published wrapper
-image or a running container. The wrapper still needs rebuilding.
+The workflow commits a changed pin to `main`, then runs the reusable build and
+smoke checks on native amd64 and arm64 runners at that exact commit. If checks
+fail, the workflow does not publish or move `latest`; a later daily run retries.
+After checks pass, one multi-platform image build receives all of these tags:
 
-An already-invalidated refresh token requires a fresh provider login. The image
-update cannot restore that token, and successful local smoke tests do not prove
-that a live account's refresh problem is resolved.
+- the upstream version without `v`, such as `8.0.61`;
+- the major/minor tag, such as `8.0`;
+- the major tag, such as `8`;
+- the short source commit tag, such as `sha-abcdef0`;
+- `latest`.
 
-## Build or load a local test image
+The workflow then creates or updates the GitHub release with the `v` prefix, such
+as `v8.0.61`. Later runs compare the release and image tags and retry if the
+publication was incomplete. Version tags and `latest` are built from the same
+source and image, so `latest` tracks the most recently tested upstream release.
+Creating a release tag manually does not publish an image.
 
-On the Unraid host, build from this fork without publishing anything:
+Build checks cover both CPU architectures, Go tests, template validation,
+container startup, wrapper login, API authentication and fresh/legacy appdata
+migration. They do not perform real provider consent or a live inference request;
+verify those in an isolated Unraid trial before switching the primary container.
 
-```sh
-git clone https://github.com/Sivivatu/CLIProxyAPI_unraid.git CLIProxyAPI-unraid-test
-cd CLIProxyAPI-unraid-test
-docker build -t cliproxyapi-unraid:test-v8.0.56 .
-```
+## Test on Unraid
 
-Alternatively, load an image archive produced from the same source:
-
-```sh
-docker load -i /path/to/cliproxyapi-unraid-test-v8.0.56-amd64.tar.gz
-```
-
-An amd64 archive is for x86-64 Unraid hosts. Build from source for another
-architecture. The local image tag is `cliproxyapi-unraid:test-v8.0.56`.
-
-## Trial in Unraid
-
-Use Docker -> Add Container and select the existing CLIProxyAPI template. Change
-these settings before applying it:
+The fork's GHCR image is public. To trial it without replacing the existing
+container, use **Docker → Add Container** and set:
 
 - Name: `CLIProxyAPI-test`.
-- Repository: `cliproxyapi-unraid:test-v8.0.56` (the locally built or loaded image).
-- Host API port: `18317`; keep the container port at `8317`.
-- Host WebUI port: `18318`; keep the container port at `8318`.
+- Repository: `ghcr.io/sivivatu/cliproxyapi-unraid:latest`.
+- Host API port: `18317`; container port: `8317`.
+- Host WebUI port: `18318`; container port: `8318`.
 - API Public Port: `18317`.
-- Host appdata: `/mnt/user/appdata/cliproxyapi-test`; keep the container path at
-  `/data`. Use this separate directory rather than the existing installation's
-  appdata.
-- WebUI Password: choose a password for the test dashboard.
+- Host appdata: `/mnt/user/appdata/cliproxyapi-test`; container path: `/data`.
+- WebUI Password: a unique password for the test dashboard.
 
-This tests the new backend with fresh storage while keeping the existing
-container available. The original template points to OzoneH3's image until its
-Repository field is changed as above.
+Use a separate appdata directory. Do not run two containers against the same
+provider credentials or configuration. Open `http://UNRAID-IP:18318`, confirm
+the upstream version shown on Overview, connect a provider, then send a small
+request to `http://UNRAID-IP:18317/v1` with the test dashboard's client key.
+Check again after restart and after normal idle time. One successful request
+does not establish future automatic credential refresh or all provider flows.
 
-Open `http://UNRAID-IP:18318`, confirm the reported upstream version is v8.0.56,
-and connect the affected account through a fresh OAuth login. Point a test
-client at `http://UNRAID-IP:18317/v1` using the test dashboard's client key, then
-send a small inference request.
+To return to the original setup, stop the test container and point clients back
+to the primary endpoint. Keep the separate test appdata until you have decided
+whether to retain or remove the test installation.
 
-Check another request after a container restart and after normal idle use.
-Observe a subsequent automatic credential refresh before concluding that the
-intermittent authentication issue is fixed. One successful request proves the
-new login and routing work, not that future refreshes will succeed. If it fails,
-record the backend version, timestamp, HTTP status and provider error code;
-keep tokens and complete credential files out of reports.
+## Local development
 
-Use the test installation's own login credentials. Do not copy one OAuth token
-set between independently refreshing installations. To roll back the trial,
-stop the test container and return the client to the original endpoint.
+Build and test without publishing:
 
-## Optional publication later
+```sh
+go mod download
+go vet ./...
+go test -race ./...
+go build ./...
+python3 -m unittest discover -s tests -v
+python3 scripts/validate-template.py
+node --check web/static/app.js
+docker build -t cliproxyapi-unraid:local .
+python3 scripts/smoke.py cliproxyapi-unraid:local
+python3 scripts/smoke.py cliproxyapi-unraid:local --legacy
+```
 
-The fork's publish workflow targets `ghcr.io/sivivatu/cliproxyapi-unraid`. A normal
-push to `main` runs validation and does not publish an image. Publication only
-runs after an explicit workflow dispatch or a matching version-tag push, and
-only after the validation job succeeds. A manual dispatch on `main` publishes
-the `latest` tag; version-tag runs publish their configured version/SHA tags.
+The release pin updater can be run locally to verify the latest source metadata:
 
-When ready, run **Actions -> Publish GHCR -> Run workflow** on `main`. The first
-publication may need package visibility/access configuration before Unraid can
-pull it. Verify access before changing a container's Repository to
-`ghcr.io/sivivatu/cliproxyapi-unraid:latest`.
+```sh
+python3 scripts/sync-upstream.py
+git diff -- Dockerfile upstream-release.json
+```
 
-The inherited template and `scripts/activate-release.py` still target OzoneH3's
-public image. They are not a deployment path for this fork; use the explicit
-Repository override described here. No upstream contribution or registry
-publication is needed for the local trial.
+It may update those files; review the pin and digest before committing local
+changes. The GH Actions workflow is responsible for production publication.

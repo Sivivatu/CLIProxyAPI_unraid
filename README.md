@@ -1,10 +1,11 @@
 # CLIProxyAPI for Unraid
 
-**Sivivatu test fork:** this fork updates the bundled CLIProxyAPI to v8.0.56.
-See [Testing this fork](FORK_TESTING.md) for a local image build, an isolated
-Unraid trial and optional publication to your own registry namespace. The
-original installation guide and template below still reference OzoneH3's public
-image; importing that template alone does not install this fork's backend.
+**Sivivatu fork:** this fork bundles the CLIProxyAPI version recorded in
+[`upstream-release.json`](upstream-release.json) and publishes its
+production image as `ghcr.io/sivivatu/cliproxyapi-unraid`. The daily release
+workflow checks upstream and publishes a new tested wrapper release when a
+stable CLIProxyAPI version appears. See [Testing this fork](FORK_TESTING.md)
+for isolated Unraid testing and local development.
 
 A small Go supervisor and browser dashboard around the upstream CLIProxyAPI
 runtime. It creates configuration and keys automatically, persists your accounts,
@@ -15,14 +16,17 @@ CLIProxyAPI is a third-party project. Provider availability and authentication
 methods are controlled by their respective services. This is not an official
 OpenAI or Unraid application.
 
-**Release status:** the template uses the public
-`ghcr.io/ozoneh3/cliproxyapi-unraid` image. No Community Applications submission
-was made during this work. Local development commands use
-`cliproxyapi-unraid:local`.
+**Release status:** the fork's public GHCR image is available at
+`ghcr.io/sivivatu/cliproxyapi-unraid:latest`. The fork's Unraid template selects
+this image. Existing templates imported from OzoneH3 need their Repository field
+changed to select the fork. No Community Applications submission is claimed.
+Local development commands use `cliproxyapi-unraid:local`.
 
 ## Install on Unraid
 
-After the image is public and the CA listing has been accepted:
+To install the fork's current published image, set the template's **Repository**
+to `ghcr.io/sivivatu/cliproxyapi-unraid:latest`. The image is public on GHCR;
+Community Applications availability depends on a separate submission and review.
 
 1. **Apps → CLIProxyAPI → Install**.
 2. Choose a unique **WebUI Password**, between 12 and 72 bytes. Keep the default
@@ -281,35 +285,46 @@ There are no npm or CDN dependencies in the shipped frontend.
 ## Build and publish
 
 The Dockerfile builds a static Go wrapper and layers it onto the upstream image,
-without modifying or rebuilding upstream source. It pins the v8.0.56
-multi-platform image digest; updating that digest is an intentional maintenance
-change. Upstream's manifest contains Linux amd64 and arm64. Local runtime testing
-was performed on amd64; CI includes native amd64 and arm64 build/test jobs.
+without modifying or rebuilding upstream source. The current pin is recorded in
+[`upstream-release.json`](upstream-release.json); it selects the stable CLIProxyAPI
+image by immutable multi-platform digest. The daily workflow checks
+`router-for-me/CLIProxyAPI` at 05:23 UTC and can also be started manually on
+`main`. It accepts stable `vN.N.N` releases, checks that the matching Docker Hub
+image includes Linux amd64 and arm64, and updates the Dockerfile pin and metadata
+together. It refuses downgrades and changed digests for an already pinned version.
 
 This update includes upstream's [Codex OAuth refresh recovery fix](https://github.com/router-for-me/CLIProxyAPI/issues/6742).
 An already-invalidated refresh token still requires reconnecting the account.
 
-`.github/workflows/build.yml` runs Go tests, race checks, vet, XML and JavaScript
-validation, a Docker build, and real-upstream smoke tests. Pull requests never
-publish. `.github/workflows/publish.yml` first calls those checks, then publishes
-from a version tag such as `v1.0.0`, or a manual run on `main`, using
-`GITHUB_TOKEN` with `packages: write`. Tags include semver, commit SHA, and `latest`
-for stable releases/manual main builds. Prereleases do not replace stable latest.
+When a pin changes, the workflow commits the pin to `main` before testing it. A
+failed test therefore leaves the previously published production image and
+`latest` in place; the next daily run retries the publication. The reusable
+`.github/workflows/build.yml` validates the exact source commit on native amd64
+and arm64, including Go tests, vet, Docker builds, and fresh-install and legacy
+smoke tests. After both jobs pass, one multi-platform build publishes all tags to
+`ghcr.io/sivivatu/cliproxyapi-unraid`: the upstream version without `v` (for
+example `8.0.61`), major/minor, major, short source SHA, and `latest`. They all
+refer to the same image build. The workflow then creates or updates the matching
+GitHub release (for example `v8.0.61`). It checks for missing image tags or
+release records on later runs and retries incomplete publication. Do not create
+release tags manually to trigger publication; the scheduled workflow owns this
+sequence. GitHub Actions uses its repository token, and no registry credential
+is stored in the source tree.
 
-The published image name is **`ghcr.io/ozoneh3/cliproxyapi-unraid`**. Registry
-repository names must be lowercase; GitHub repository links retain `OzoneH3`.
-No registry credentials are committed. Set the GHCR package visibility to public.
-After a public multi-platform `latest` image exists:
+The workflow builds and tests both architectures, but provider consent and live
+inference still require a separate deployment test. A passing smoke test does
+not establish that every provider integration works.
+
+For local release validation, after the automated workflow updates the pin:
 
 ```sh
-python3 scripts/activate-release.py
+python3 scripts/sync-upstream.py
 python3 scripts/validate-template.py
 ```
 
-The activation script performs an anonymous GHCR manifest check and only then
-changes the template from the local build tag to the public image. Review and
-commit that change. It does not publish anything or create a CA submission.
-Verify the raw template, README, support, and PNG URLs on the public repository.
+`sync-upstream.py` resolves the latest upstream release and verifies its
+multi-platform image; it only updates local pin metadata. It does not publish an
+image or create a CA submission.
 
 ### Publishing to Unraid Community Applications
 
